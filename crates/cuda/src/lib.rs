@@ -104,12 +104,16 @@ impl SP1CudaProver {
     /// Creates a new [SP1Prover] that runs inside a Docker container and returns a
     /// [SP1ProverClient] that can be used to communicate with the container.
     pub fn new() -> Result<Self, Box<dyn StdError>> {
-        let container_name = "sp1-gpu";
+        let sp1_prover_port: u16 = std::env::var("SP1_PROVER_PORT")
+            .unwrap_or_else(|_| "3000".to_string())
+            .parse()
+            .unwrap_or(3000);
+        let container_name = format!("sp1-gpu-{}", sp1_prover_port);
         let image_name = std::env::var("SP1_GPU_IMAGE")
             .unwrap_or_else(|_| "public.ecr.aws/succinct-labs/moongate:v4.1.0".to_string());
 
         let cleaned_up = Arc::new(AtomicBool::new(false));
-        let cleanup_name = container_name;
+        let cleanup_name = container_name.clone();
         let cleanup_flag = cleaned_up.clone();
 
         // Check if Docker is available and the user has necessary permissions
@@ -124,10 +128,7 @@ impl SP1CudaProver {
 
         // Start the docker container
         let rust_log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "none".to_string());
-        let sp1_prover_port: u16 = std::env::var("SP1_PROVER_PORT")
-            .unwrap_or_else(|_| "3000".to_string())
-            .parse()
-            .unwrap_or(3000);
+
         Command::new("docker")
             .args([
                 "run",
@@ -139,7 +140,7 @@ impl SP1CudaProver {
                 "--gpus",
                 "all",
                 "--name",
-                container_name,
+                &container_name,
                 &image_name,
             ])
             // Redirect stdout and stderr to the parent process
@@ -152,7 +153,7 @@ impl SP1CudaProver {
         ctrlc::set_handler(move || {
             tracing::debug!("received Ctrl+C, cleaning up...");
             if !cleanup_flag.load(Ordering::SeqCst) {
-                cleanup_container(cleanup_name);
+                cleanup_container(&cleanup_name);
                 cleanup_flag.store(true, Ordering::SeqCst);
             }
             std::process::exit(0);
