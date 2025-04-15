@@ -124,13 +124,17 @@ impl SP1CudaProver {
 
         // Start the docker container
         let rust_log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "none".to_string());
+        let sp1_prover_port: u16 = std::env::var("SP1_PROVER_PORT")
+            .unwrap_or_else(|_| "3000".to_string())
+            .parse()
+            .unwrap_or(3000);
         Command::new("docker")
             .args([
                 "run",
                 "-e",
                 &format!("RUST_LOG={}", rust_log_level),
                 "-p",
-                "3000:3000",
+                &format!("{}:{}", sp1_prover_port, sp1_prover_port),
                 "--rm",
                 "--gpus",
                 "all",
@@ -160,7 +164,8 @@ impl SP1CudaProver {
 
         // Check if the container is ready
         let client = Client::from_base_url(
-            Url::parse("http://localhost:3000/twirp/").expect("failed to parse url"),
+            Url::parse(&format!("http://localhost:{}/twirp/", sp1_prover_port))
+                .expect("failed to parse url"),
         )
         .expect("failed to create client");
 
@@ -193,7 +198,8 @@ impl SP1CudaProver {
         })?;
 
         let client = Client::new(
-            Url::parse("http://localhost:3000/twirp/").expect("failed to parse url"),
+            Url::parse(&format!("http://localhost:{}/twirp/", sp1_prover_port))
+                .expect("failed to parse url"),
             reqwest::Client::new(),
             vec![Box::new(LoggingMiddleware) as Box<dyn Middleware>],
         )
