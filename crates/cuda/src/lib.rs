@@ -134,7 +134,7 @@ impl SP1CudaProver {
                 "-e",
                 &format!("RUST_LOG={}", rust_log_level),
                 "-p",
-                &format!("{}:{}", sp1_prover_port, sp1_prover_port),
+                &format!("{}:3000", sp1_prover_port),
                 "--rm",
                 "--gpus",
                 "all",
