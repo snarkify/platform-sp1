@@ -128,7 +128,19 @@ impl SP1CudaProver {
 
         // Start the docker container
         let rust_log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "none".to_string());
-
+        let nvidia_visible_devices =
+            std::env::var("NVIDIA_VISIBLE_DEVICES").unwrap_or_else(|_| "all".to_string());
+        let gpu_config = if nvidia_visible_devices == "all" {
+            String::from("all")
+        } else {
+            format!("'\"device={}\"'", nvidia_visible_devices)
+        };
+        tracing::info!(
+            "Starting container {} with port {} and GPU config: {}",
+            container_name,
+            sp1_prover_port,
+            gpu_config
+        );
         Command::new("docker")
             .args([
                 "run",
@@ -138,7 +150,7 @@ impl SP1CudaProver {
                 &format!("{}:3000", sp1_prover_port),
                 "--rm",
                 "--gpus",
-                "all",
+                &gpu_config,
                 "--name",
                 &container_name,
                 &image_name,
