@@ -133,7 +133,7 @@ impl SP1CudaProver {
         let gpu_config = if nvidia_visible_devices == "all" {
             String::from("all")
         } else {
-            format!("'\"device={}\"'", nvidia_visible_devices)
+            format!("\"device={}\"", nvidia_visible_devices)
         };
         tracing::info!(
             "Starting container {} with port {} and GPU config: {}",
