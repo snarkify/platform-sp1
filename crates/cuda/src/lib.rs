@@ -167,12 +167,16 @@ impl SP1CudaProver {
         reqwest_middlewares: Vec<Box<dyn Middleware>>,
     ) -> Result<SP1CudaProver, Box<dyn StdError>> {
         // If the moongate endpoint url hasn't been provided, we start the Docker container
-        let container_name = "sp1-gpu";
+        let sp1_prover_port: u16 = std::env::var("SP1_PROVER_PORT")
+            .unwrap_or_else(|_| "3000".to_string())
+            .parse()
+            .unwrap_or(3000);
+        let container_name = format!("sp1-gpu-{}", sp1_prover_port);
         let image_name = std::env::var("SP1_GPU_IMAGE")
             .unwrap_or_else(|_| "public.ecr.aws/succinct-labs/moongate:v4.1.0".to_string());
 
         let cleaned_up = Arc::new(AtomicBool::new(false));
-        let cleanup_name = container_name;
+        let cleanup_name = container_name.clone();
         let cleanup_flag = cleaned_up.clone();
 
         // Check if Docker is available and the user has necessary permissions
@@ -187,18 +191,31 @@ impl SP1CudaProver {
 
         // Start the docker container
         let rust_log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "none".to_string());
+        let nvidia_visible_devices =
+            std::env::var("NVIDIA_VISIBLE_DEVICES").unwrap_or_else(|_| "all".to_string());
+        let gpu_config = if nvidia_visible_devices == "all" {
+            String::from("all")
+        } else {
+            format!("\"device={}\"", nvidia_visible_devices)
+        };
+        tracing::info!(
+            "Starting container {} with port {} and GPU config: {}",
+            container_name,
+            sp1_prover_port,
+            gpu_config
+        );
         Command::new("docker")
             .args([
                 "run",
                 "-e",
                 &format!("RUST_LOG={}", rust_log_level),
                 "-p",
-                "3000:3000",
+                &format!("{}:3000", sp1_prover_port),
                 "--rm",
                 "--gpus",
-                "all",
+                &gpu_config,
                 "--name",
-                container_name,
+                &container_name,
                 &image_name,
             ])
             // Redirect stdout and stderr to the parent process
@@ -211,7 +228,7 @@ impl SP1CudaProver {
         ctrlc::set_handler(move || {
             tracing::debug!("received Ctrl+C, cleaning up...");
             if !cleanup_flag.load(Ordering::SeqCst) {
-                cleanup_container(cleanup_name);
+                cleanup_container(&cleanup_name);
                 cleanup_flag.store(true, Ordering::SeqCst);
             }
             std::process::exit(0);
@@ -222,7 +239,8 @@ impl SP1CudaProver {
         std::thread::sleep(Duration::from_secs(2));
 
         let client = Client::new(
-            Url::parse("http://localhost:3000/twirp/").expect("failed to parse url"),
+            Url::parse(&format!("http://localhost:{}/twirp/", sp1_prover_port))
+                .expect("failed to parse url"),
             reqwest::Client::new(),
             reqwest_middlewares,
         )
