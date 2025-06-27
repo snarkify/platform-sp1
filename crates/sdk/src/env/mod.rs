@@ -57,7 +57,9 @@ impl EnvProver {
             },
             "cuda" => {
                 check_release_build();
-                Box::new(CudaProver::new(SP1Prover::new(), MoongateServer::default()))
+                let port = env::var("SP1_PROVER_PORT").ok().and_then(|p| p.parse::<u64>().ok());
+                let visible_device_index = env::var("SP1_PROVER_VISIBLE_DEVICE_INDEX").ok().and_then(|v| v.parse::<u64>().ok());
+                Box::new(CudaProver::new(SP1Prover::new(), MoongateServer::Local { visible_device_index, port }))
             }
             "network" => {
                 #[cfg(not(feature = "network"))]
